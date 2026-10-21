@@ -144,7 +144,7 @@ textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var
 <div class="wrap">
   <header>
     <h1>우리집 차계부</h1>
-    <span class="sub" id="sync">불러오는 중…</span>
+    <span class="sub"><span id="sync">불러오는 중…</span> <button class="ghost" id="logoutBtn" hidden>로그아웃</button></span>
   </header>
   <nav class="tabs" id="tabs" role="tablist"></nav>
   <div id="globalAlarm"></div>
@@ -318,7 +318,7 @@ function homeView(){
 function notifyPanel(){
   return `<div class="panel">
     <div class="sec-h"><h2>백업·공유</h2></div>
-    <p class="note">기록은 이 휴대폰에만 저장돼요. 아내분과 기록을 맞추려면 ‘백업 보내기’로 파일을 카카오톡 등으로 보내고, 받은 사람이 ‘백업 불러오기’를 누르세요. 두 사람 기록이 합쳐집니다.</p>
+    <p class="note">기록은 두 분 구글 계정으로 함께 저장되고, 누가 입력하든 바로 반영돼요. ‘백업 보내기’는 혹시 모를 때를 대비해 파일로 보관할 때 쓰고, 예전 백업 파일은 ‘백업 불러오기’로 한 번 넣으면 올라갑니다.</p>
     <div class="btns"><button class="primary" data-act="exportB">백업 보내기</button><label class="btnlike" for="importB">백업 불러오기<input type="file" id="importB"></label></div>
   </div>`;
 }
@@ -555,7 +555,8 @@ document.addEventListener("change",e=>{
       try{
         const d=JSON.parse(fr.result); if(!d||!Array.isArray(d.cars)) throw 0;
         d.cars.forEach(b=>{const i=cars.findIndex(c=>c.id===b.id); if(i<0)cars.push(b); else cars[i]=mergeCar(cars[i],b)});
-        lsSave(); sel="home"; render(); toast("백업을 불러왔어요. 차 "+d.cars.length+"대 기록을 합쳤어요.");
+        if(db&&!local){cars.forEach(c=>save(c))} else lsSave();
+        sel="home"; render(); toast("백업을 불러왔어요. 차 "+d.cars.length+"대 기록을 합쳤어요.");
       }catch(x){toast("차계부 백업 파일이 아니에요. ‘차계부-백업’으로 시작하는 .json 파일을 골라 주세요.")}
     };
     fr.onerror=()=>toast("파일을 읽지 못했어요. 휴대폰에 내려받은 파일인지 확인해 주세요.");
@@ -573,19 +574,89 @@ function startLocal(why){
   local=true; cars=lsLoad(); try{ns={...ns,...JSON.parse(localStorage.getItem("carcare-ns")||"{}")}}catch(e){}
   $("#sync").textContent=why; render();
 }
-(async()=>{
-  try{db=window.claude?.use?await window.claude.use("db"):null}catch(e){db=null}
-  if(!db){startLocal("이 휴대폰에 저장 중");return}
-  $("#sync").textContent="두 사람이 함께 보는 기록";
-  db.doc("settings/notify").onSnapshot(snap=>{if(snap.exists){const d=snap.data();ns={enabled:d.enabled!==false,mileage:d.mileage!==false,maint:d.maint!==false}} if(sel==="home")render();},()=>{});
-  db.collection("cars").onSnapshot(snap=>{
+function showLogin(msg){
+  db=null; cars=[]; $("#logoutBtn").hidden=true;
+  $("#sync").textContent="로그인 필요";
+  $("#tabs").innerHTML=""; $("#globalAlarm").innerHTML="";
+  $("#main").innerHTML=`<div class="panel"><h2 style="margin:0;font-size:17px">구글 계정으로 로그인</h2>
+    <p class="empty">${msg||"가족 일정에서 쓰는 계정으로 로그인하세요. 차계부는 기석 님과 아내분 계정으로만 열려요."}</p>
+    <div class="btns"><button class="primary" id="loginBtn">Google로 로그인</button></div>
+    <form id="emailLogin" class="panel" style="padding:12px;gap:8px">
+      <span class="meta">이메일(한메일 등)로 가입한 계정이면 여기로 로그인하세요.</span>
+      <label for="lg-email">이메일<input id="lg-email" type="email" autocomplete="username" required></label>
+      <label for="lg-pw">비밀번호<input id="lg-pw" type="password" autocomplete="current-password" required></label>
+      <div class="btns"><button class="primary" type="submit">이메일로 로그인</button><button type="button" class="ghost" id="resetPw">비밀번호를 잊었어요</button></div>
+    </form></div>`;
+}
+let unsubs=[];
+window.addEventListener("fbauth",e=>{
+  unsubs.forEach(u=>{try{u()}catch(x){}}); unsubs=[];
+  const user=e.detail;
+  if(!user){showLogin();return}
+  db=window.fbdb; local=false;
+  $("#sync").textContent=user.email; $("#logoutBtn").hidden=false;
+  render();
+  unsubs.push(db.doc("settings/notify").onSnapshot(snap=>{if(snap.exists){const d=snap.data();ns={enabled:d.enabled!==false,mileage:d.mileage!==false,maint:d.maint!==false}}},()=>{}));
+  unsubs.push(db.collection("cars").onSnapshot(snap=>{
     cars=snap.docs.map(d=>({id:d.id,...JSON.parse(JSON.stringify(d.data()))}));
     cars.sort((a,b)=>(a.order??0)-(b.order??0)||String(a.id).localeCompare(b.id));
     if(document.activeElement&&document.activeElement.matches("input,select")&&document.activeElement.closest("form.edit,#carForm,form.quick,#fillForm")) return;
     render();
-  },err=>{startLocal("연결이 끊겨 이 기기에만 저장 중")});
-})();
-render();
+  },err=>{
+    if(err&&err.code==="permission-denied") showLogin(user.email+" 계정은 차계부를 볼 권한이 없어요. 기석 님이나 아내분 계정으로 다시 로그인하세요.");
+    else toast("연결이 불안정해요. 잠시 뒤 다시 열어 주세요.");
+  }));
+});
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button"); if(!t) return;
+  if(t.id==="loginBtn"){ if(window.fbLogin) window.fbLogin().catch(x=>toast("로그인하지 못했어요: "+(x&&x.code||""))); else toast("연결 중이에요. 잠시 뒤 다시 눌러 주세요."); }
+  if(t.id==="logoutBtn"&&window.fbLogout) window.fbLogout();
+  if(t.id==="resetPw"){const em=($("#lg-email")||{}).value; if(!em){toast("이메일 칸에 주소를 먼저 넣어 주세요.");return}
+    window.fbReset(em).then(()=>toast("비밀번호 재설정 메일을 보냈어요. 메일함을 확인하세요.")).catch(()=>toast("메일을 보내지 못했어요. 주소를 확인해 주세요."));}
+});
+document.addEventListener("submit",e=>{
+  if(e.target.id!=="emailLogin") return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if(!window.fbEmailLogin){toast("연결 중이에요. 잠시 뒤 다시 눌러 주세요.");return}
+  window.fbEmailLogin($("#lg-email").value.trim(),$("#lg-pw").value).catch(x=>{
+    const c=x&&x.code||"";
+    toast(c.includes("invalid")||c.includes("wrong-password")||c.includes("user-not-found")?"이메일 또는 비밀번호가 맞지 않아요.":c.includes("too-many")?"시도가 너무 많아요. 잠시 뒤 다시 해 주세요.":"로그인하지 못했어요: "+c);
+  });
+},true);
+setTimeout(()=>{ if(!window.fbReady){ $("#sync").textContent="연결 실패"; $("#main").innerHTML=`<div class="panel"><p class="empty">서버에 연결하지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.</p></div>`; } },12000);
+</script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyBuVejjfhkQnYflFmZTbu-ObVDDenEKcaU",
+  authDomain: "family-schedule-93185.firebaseapp.com",
+  projectId: "family-schedule-93185",
+  storageBucket: "family-schedule-93185.firebasestorage.app",
+  messagingSenderId: "243482715052",
+  appId: "1:243482715052:web:b0f85be7838af7d5e41009"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+let fs; try { fs = initializeFirestore(app, { localCache: persistentLocalCache() }); } catch (e) { fs = initializeFirestore(app, {}); }
+const name = n => "carcare_" + n;
+window.fbdb = {
+  collection(n){ const c = collection(fs, name(n)); return {
+    doc: id => ({ set: b => setDoc(doc(c, id), b), delete: () => deleteDoc(doc(c, id)) }),
+    onSnapshot: (next, err) => onSnapshot(c, s => next({ docs: s.docs.map(d => ({ id: d.id, data: () => d.data() })) }), err)
+  }; },
+  doc(path){ const [a, b] = path.split("/"); const r = doc(fs, name(a), b); return {
+    set: x => setDoc(r, x),
+    onSnapshot: (next, err) => onSnapshot(r, s => next({ exists: s.exists(), data: () => s.data() }), err)
+  }; }
+};
+const provider = new GoogleAuthProvider();
+window.fbLogin = async () => { try { await signInWithPopup(auth, provider); } catch (e) { if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) await signInWithRedirect(auth, provider); else throw e; } };
+window.fbLogout = () => signOut(auth);
+window.fbEmailLogin = (e, p) => signInWithEmailAndPassword(auth, e, p);
+window.fbReset = e => sendPasswordResetEmail(auth, e);
+onAuthStateChanged(auth, user => { window.fbReady = true; window.dispatchEvent(new CustomEvent("fbauth", { detail: user })); });
 </script>
 </body>
 </html>

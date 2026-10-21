@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function email() {
+      return request.auth != null ? request.auth.token.email.lower() : '';
+    }
+    function isEditor() {
+      return email() in ['gogiseog7@gmail.com', 'kks30042929@hanmail.net'];
+    }
+    function isViewer() {
+      return isEditor() || email() in ['woorigo6015@gmail.com', 'udamgo89@gmail.com'];
+    }
+
+    // 가족 일정 (기존 그대로)
+    match /families/main {
+      allow read: if isViewer();
+      allow write: if isEditor();
+    }
+
+    // 차계부 (새로 추가) — 두 분만 읽고 쓰기
+    match /carcare_cars/{carId} {
+      allow read, write: if isEditor();
+    }
+    match /carcare_settings/{docId} {
+      allow read, write: if isEditor();
+    }
+  }
+}
