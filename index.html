@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#20262c">
+<title>우리집 차계부</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one narrow column like a dashboard cluster — car tabs, odometer readout, warnings, parts list, history */
+:root{
+  --bg:#f3f4f2; --panel:#ffffff; --ink:#1c2126; --muted:#5f6871; --line:#d9ddd8;
+  --accent:#d98a0b; --accent-ink:#ffffff; --accent-soft:#fbefd9;
+  --over:#c4342b; --over-soft:#fbe4e2; --soon:#b8740a; --soon-soft:#fbefd9; --ok:#2f7d4f; --ok-soft:#e2f2e8;
+  --dial:#20262c; --dial-ink:#f2c46a;
+  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14181c; --panel:#1d2227; --ink:#e8ebee; --muted:#9aa3ab; --line:#2f363d;
+  --accent:#f0a32a; --accent-ink:#1a1206; --accent-soft:#3a2c12;
+  --over:#f0675d; --over-soft:#3d1d1b; --soon:#f0b34a; --soon-soft:#3a2c12; --ok:#5cc489; --ok-soft:#173326;
+  --dial:#0b0e11; --dial-ink:#f2c46a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14181c; --panel:#1d2227; --ink:#e8ebee; --muted:#9aa3ab; --line:#2f363d;
+  --accent:#f0a32a; --accent-ink:#1a1206; --accent-soft:#3a2c12;
+  --over:#f0675d; --over-soft:#3d1d1b; --soon:#f0b34a; --soon-soft:#3a2c12; --ok:#5cc489; --ok-soft:#173326;
+  --dial:#0b0e11; --dial-ink:#f2c46a; color-scheme:dark}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:720px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:22px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 12px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:6px 8px}
+button.danger{color:var(--over);border-color:var(--over)}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px;min-width:0}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.tab{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px}
+.tab[aria-selected="true"]{border-color:var(--ink);font-weight:700}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.dot.over{background:var(--over)} .dot.soon{background:var(--soon)} .dot.unset{background:var(--line)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.carhead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.carname{font-size:18px;font-weight:700}
+.garage{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}
+.gcard{display:flex;flex-direction:column;padding:0;overflow:hidden;border-radius:16px;text-align:left;background:var(--panel)}
+.gcard:hover{border-color:var(--muted)}
+.gopen{display:flex;flex-direction:column;padding:0;border:0;border-radius:0;background:none;text-align:left;color:inherit;width:100%}
+.quick{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;padding:0 16px 16px}
+.quick input{font-family:var(--f-num);font-size:17px}
+.gimg{position:relative;display:block;aspect-ratio:16/10;max-width:100%;background:var(--dial);overflow:hidden}
+.gimg img{width:100%;height:100%;object-fit:cover;display:block}
+.noimg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dial-ink);font-size:22px;font-weight:700}
+.gstat{position:absolute;top:10px;left:10px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--ok-soft);color:var(--ok)}
+.gstat.over{background:var(--over-soft);color:var(--over)} .gstat.soon{background:var(--soon-soft);color:var(--soon)} .gstat.unset{background:var(--panel);color:var(--muted)}
+.gbody{display:flex;flex-direction:column;gap:2px;padding:14px 16px 16px}
+.gname{font-size:20px;font-weight:700}
+.godo{font-family:var(--f-num);font-size:15px;margin-top:6px;font-variant-numeric:tabular-nums}
+.gdue{font-size:13px;color:var(--over)}
+.gcta{margin-top:8px;font-size:13px;color:var(--accent);font-weight:700}
+@media (prefers-reduced-motion:no-preference){.gimg img{transition:transform .35s ease}.gcard:hover .gimg img{transform:scale(1.03)}}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.est{color:var(--dial-ink);opacity:.85}
+.fstats{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.fstats b{font-family:var(--f-num);color:var(--ink);font-size:16px;font-variant-numeric:tabular-nums}
+.fillform{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:end}
+.fillform .full{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.fills{display:flex;flex-direction:column;font-size:13px}
+.fills div{display:grid;grid-template-columns:78px 1fr 1fr 1fr 56px;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.fills div:first-child{border-top:0;color:var(--muted);font-size:12px}
+.fills .n{font-family:var(--f-num);text-align:right;font-variant-numeric:tabular-nums}
+.sw{flex-direction:row;align-items:center;gap:10px;font-size:14px;color:var(--ink)}
+.sw input{width:20px;height:20px;flex:0 0 auto;accent-color:var(--accent)}
+.sw.sub{padding-left:30px}
+.sw.dis{opacity:.5}
+@media (max-width:520px){.fillform{grid-template-columns:repeat(2,minmax(0,1fr))}.fills div{grid-template-columns:64px 1fr 1fr 1fr 44px}}
+.btnlike{display:inline-flex;align-items:center;font-size:15px;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;background:var(--panel)}
+.btnlike input{display:none}
+.memo{white-space:pre-line;font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-height:140px}
+.photo{width:100%;max-width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;background:var(--line);display:block}
+.tab img{width:28px;height:20px;object-fit:cover;border-radius:4px}
+.meta{color:var(--muted);font-size:13px}
+.dial{background:var(--dial);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.dial .lbl{color:#9aa3ab;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.digits{display:flex;gap:3px;align-items:flex-end;flex-wrap:wrap}
+.digits span{font-family:var(--f-num);font-weight:600;font-size:30px;color:var(--dial-ink);background:#ffffff0d;border-radius:4px;padding:0 5px;line-height:1.25;font-variant-numeric:tabular-nums}
+.digits em{font-style:normal;font-family:var(--f-num);color:#9aa3ab;font-size:14px;margin-left:6px;padding-bottom:4px}
+.dial .when{color:#9aa3ab;font-size:12px}
+.odoform{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.odoform input{font-family:var(--f-num);font-size:18px}
+.msg{font-size:13px;border-radius:8px;padding:8px 10px}
+.msg.err{background:var(--over-soft);color:var(--over)}
+.msg.info{background:var(--accent-soft);color:var(--ink)}
+.alarm{border:1px solid var(--over);background:var(--over-soft);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.alarm.soonbox{border-color:var(--soon);background:var(--soon-soft)}
+.alarm h2{font-size:15px;margin:0}
+.alarm ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:2px}
+.sec-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sec-h h2{font-size:15px;margin:0}
+.legend{display:flex;gap:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.items{display:flex;flex-direction:column}
+.item{border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;width:100%;text-align:left;background:none;border:0;border-radius:0}
+.row .nm{font-weight:500;min-width:0}
+.row .rem{font-family:var(--f-num);font-size:13px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{grid-column:1/-1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.bar b{display:block;height:100%;background:var(--ok)}
+.row .detail{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.st-over .rem{color:var(--over);font-weight:600} .st-over .bar b{background:var(--over)}
+.st-soon .rem{color:var(--soon);font-weight:600} .st-soon .bar b{background:var(--soon)}
+.st-unset .rem{color:var(--muted)}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:6px;vertical-align:1px}
+.pill.over{background:var(--over-soft);color:var(--over)} .pill.soon{background:var(--soon-soft);color:var(--soon)}
+.edit{padding:0 0 14px;display:flex;flex-direction:column;gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.off .nm,.off .rem{color:var(--muted);text-decoration:line-through}
+.log{display:flex;flex-direction:column;font-size:13px}
+.log div{display:grid;grid-template-columns:86px 92px 1fr;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.log div:first-child{border-top:0}
+.log .n{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:right}
+.empty{color:var(--muted);font-size:14px}
+.note{color:var(--muted);font-size:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);z-index:20}
+.carform{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.log div{grid-template-columns:76px 80px 1fr}.digits span{font-size:26px}}
+@media (prefers-reduced-motion:no-preference){.bar b{transition:width .4s ease}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>우리집 차계부</h1>
+    <span class="sub" id="sync">불러오는 중…</span>
+  </header>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <div id="globalAlarm"></div>
+  <main id="main"><div class="panel"><p class="empty">차량 정보를 불러오는 중입니다.</p></div></main>
+  <p class="note">교체 주기는 일반적인 국산 승용·SUV 기준의 시작값입니다. 차량 취급설명서나 정비소 권장값에 맞게 항목마다 수정하세요. 시내 단거리·잦은 공회전 같은 가혹 조건이면 주기를 줄이는 게 좋습니다.</p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const PRESETS = {
+  common: [
+    ["oil","엔진오일(합성유)·오일필터",15000,12],
+    ["cabin","에어컨(실내) 필터",10000,6],
+    ["aircl","엔진 에어클리너",20000,24],
+    ["rot","타이어 위치교환",10000,0],
+    ["tire","타이어 교체",50000,60],
+    ["brkpad","브레이크 패드 점검",20000,12],
+    ["brkfl","브레이크액",40000,24],
+    ["cool","냉각수(부동액)",60000,48],
+    ["atf","자동변속기 오일",80000,0],
+    ["batt","배터리",0,48],
+    ["wiper","와이퍼 블레이드",0,12]
+  ],
+  gasoline: [["plug","점화플러그",80000,0]],
+  lpg: [["plug","점화플러그",60000,0]],
+  diesel: [["fuelf","연료필터",30000,24]]
+};
+const FUEL = {gasoline:"휘발유",diesel:"경유",lpg:"LPG",hybrid:"하이브리드"};
+function presetItems(fuel){
+  const extra = PRESETS[fuel==="hybrid"?"gasoline":fuel] || [];
+  return [...PRESETS.common, ...extra].map(([k,label,km,mo])=>({k,label,km,mo,lastKm:null,lastDate:null,on:true}));
+}
+
+let ns={enabled:true,mileage:true,maint:true};
+let db=null, cars=[], sel="home", openItem=null, editingCar=false, addingCar=false, odoMsg=null, local=false;
+const $=s=>document.querySelector(s);
+const fmt=n=>n==null||isNaN(n)?"–":Math.round(n).toLocaleString("ko-KR");
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+function addMonths(iso,m){const d=new Date(iso+"T00:00:00");d.setMonth(d.getMonth()+m);return d}
+function daysBetween(a,b){return Math.round((b-a)/86400000)}
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+const D0=()=>new Date(new Date().toDateString());
+const pd=s=>new Date(s+"T00:00:00");
+function kmPoints(car){
+  const pts=[];
+  (car.log||[]).forEach(l=>{if(l.km!=null&&l.d)pts.push([pd(l.d),l.km])});
+  (car.fills||[]).forEach(f=>{if(f.km!=null&&f.d)pts.push([pd(f.d),f.km])});
+  if(car.odo!=null&&car.odoDate)pts.push([pd(car.odoDate),car.odo]);
+  return pts.sort((a,b)=>a[0]-b[0]);
+}
+function kmRate(car){
+  const pts=kmPoints(car); if(pts.length<2) return null;
+  const last=pts[pts.length-1]; const cut=new Date(last[0]); cut.setMonth(cut.getMonth()-18);
+  let w=pts.filter(x=>x[0]>=cut); if(w.length<2) w=pts;
+  const a=w[0], b=w[w.length-1], d=daysBetween(a[0],b[0]);
+  if(d<30||b[1]<=a[1]) return null;
+  return (b[1]-a[1])/d;
+}
+function estOdo(car){
+  const pts=kmPoints(car); if(!pts.length) return null;
+  const base=pts.reduce((m,x)=>x[1]>m[1]||(x[1]===m[1]&&x[0]>m[0])?x:m);
+  const r=kmRate(car), days=Math.max(0,daysBetween(base[0],D0()));
+  return {km:r?base[1]+r*days:base[1], est:!!(r&&days>=3), base:base[1], baseDate:base[0], rate:r};
+}
+const ym=d=>d.getFullYear()+"년 "+(d.getMonth()+1)+"월"+(d.getDate()<=10?" 초":d.getDate()<=20?" 중순":" 말");
+function status(it, car){
+  if(!it.on) return {st:"off",p:0};
+  const eo=estOdo(car), odo=eo?eo.km:null;
+  let remKm=null, remDays=null, p=0, eta=null;
+  if(it.km && it.lastKm!=null && odo!=null){ remKm=it.lastKm+it.km-odo; p=Math.max(p,(odo-it.lastKm)/it.km); }
+  if(it.mo && it.lastDate){ const due=addMonths(it.lastDate,it.mo); remDays=daysBetween(new Date(new Date().toDateString()),due); p=Math.max(p,daysBetween(new Date(it.lastDate+"T00:00:00"),new Date())/(it.mo*30.4)); }
+  if(remKm==null && remDays==null) return {st:"unset",p:0,remKm,remDays};
+  if(remKm!=null&&eo&&eo.rate){eta=new Date(D0().getTime()+Math.max(0,remKm)/eo.rate*86400000)}
+  if(remDays!=null){const t=addMonths(it.lastDate,it.mo); if(!eta||t<eta) eta=t}
+  const est=!!(eo&&eo.est&&remKm!=null);
+  let st="ok";
+  if((remKm!=null&&remKm<0)||(remDays!=null&&remDays<0)) st="over";
+  else if((remKm!=null&&remKm<=Math.max(1000,it.km*0.1))||(remDays!=null&&remDays<=30)) st="soon";
+  return {st,p:Math.min(1,Math.max(0,p)),remKm,remDays,eta,est};
+}
+function carState(car){
+  const s=(car.items||[]).map(it=>status(it,car).st);
+  return s.includes("over")?"over":s.includes("soon")?"soon":s.every(x=>x==="unset"||x==="off")?"unset":"ok";
+}
+function remText(r){
+  const parts=[];
+  if(r.remKm!=null) parts.push((r.est?"약 ":"")+(r.remKm<0?fmt(-r.remKm)+"km 초과":fmt(r.remKm)+"km 남음"));
+  if(r.remDays!=null) parts.push(r.remDays<0?(-r.remDays)+"일 지남":r.remDays+"일 남음");
+  return parts.join(" · ")||"기준 미입력";
+}
+
+/* ---------- storage ---------- */
+function lsLoad(){try{return JSON.parse(localStorage.getItem("carcare")||"[]")}catch(e){return []}}
+function lsSave(){try{localStorage.setItem("carcare",JSON.stringify(cars))}catch(e){}}
+const writing={};
+async function save(car){
+  car.updatedAt=Date.now();
+  if(local||!db){lsSave();render();return}
+  const {id,...body}=car;
+  const prev=writing[id]||Promise.resolve();
+  writing[id]=prev.then(()=>db.collection("cars").doc(id).set(JSON.parse(JSON.stringify(body)))).catch(e=>{
+    toast(e&&e.code==="quota_exceeded"?"저장 공간이 가득 찼습니다. 오래된 기록을 지워 주세요.":"저장하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+  });
+  render();
+  return writing[id];
+}
+async function removeCar(id){
+  cars=cars.filter(c=>c.id!==id); sel="home";
+  if(local||!db){lsSave();render();return}
+  try{await db.collection("cars").doc(id).delete()}catch(e){toast("삭제하지 못했습니다.")}
+  render();
+}
+
+/* ---------- alarm ---------- */
+function beep(){
+  try{const ac=new (window.AudioContext||window.webkitAudioContext)();
+    [0,0.22].forEach(t=>{const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=880;o.connect(g);g.connect(ac.destination);
+      g.gain.setValueAtTime(0.0001,ac.currentTime+t);g.gain.exponentialRampToValueAtTime(0.25,ac.currentTime+t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+t+0.18);
+      o.start(ac.currentTime+t);o.stop(ac.currentTime+t+0.2)})}catch(e){}
+}
+let toastT;
+function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,4200)}
+
+/* ---------- render ---------- */
+function render(){
+  if(sel!=="home"&&!cars.find(c=>c.id===sel)) sel="home";
+  $("#tabs").innerHTML=`<button class="tab" role="tab" aria-selected="${sel==="home"}" data-tab="home">우리집 차고</button>`+cars.map(c=>`<button class="tab" role="tab" aria-selected="${c.id===sel}" data-tab="${c.id}"><span class="dot ${carState(c)}"></span>${c.photo?`<img src="${esc(c.photo)}" alt="">`:""}${esc(c.name)}</button>`).join("")
+    +`<button class="tab ghost" id="addCarBtn">＋ 차량 추가</button>`;
+  renderGlobal();
+  if(addingCar){ $("#main").innerHTML=carForm(null); return; }
+  if(sel==="home"){ $("#main").innerHTML=homeView(); return; }
+  const car=cars.find(c=>c.id===sel);
+  if(!car){ $("#main").innerHTML=`<div class="panel"><p class="empty">등록된 차량이 없습니다. 위의 ‘차량 추가’로 첫 차를 등록하세요.</p></div>`; return; }
+  $("#main").innerHTML= editingCar? carForm(car) : carView(car);
+}
+function renderGlobal(){
+  const over=[],soon=[];
+  cars.forEach(c=>(c.items||[]).forEach(it=>{const r=status(it,c); if(r.st==="over")over.push([c,it,r]); else if(r.st==="soon")soon.push([c,it,r]);}));
+  const stale=cars.filter(c=>c.odoDate&&daysBetween(new Date(c.odoDate+"T00:00:00"),new Date())>=30);
+  let h="";
+  if(over.length) h+=`<div class="alarm" role="alert"><h2>정비 시기가 지났어요 (${over.length})</h2><ul>${over.map(([c,it,r])=>`<li><b>${esc(c.name)}</b> ${esc(it.label)} — ${remText(r)}</li>`).join("")}</ul></div>`;
+  if(soon.length) h+=`<div class="alarm soonbox" style="margin-top:${over.length?8:0}px"><h2>곧 정비할 항목 (${soon.length})</h2><ul>${soon.map(([c,it,r])=>`<li><b>${esc(c.name)}</b> ${esc(it.label)} — ${remText(r)}</li>`).join("")}</ul></div>`;
+  if(stale.length) h+=`<p class="msg info" style="margin:${h?8:0}px 0 0">${stale.map(c=>esc(c.name)).join(", ")}: 주행거리를 입력한 지 30일이 넘었어요. 계기판 숫자를 새로 입력해 주세요.</p>`;
+  $("#globalAlarm").innerHTML=h;
+}
+function digits(n){
+  if(n==null) return `<div class="digits"><span>–</span><span>–</span><span>–</span><span>–</span><span>–</span><span>–</span><em>km</em></div>`;
+  const s=String(Math.round(n)).padStart(6,"0");
+  return `<div class="digits">${[...s].map(d=>`<span>${d}</span>`).join("")}<em>km</em></div>`;
+}
+function homeView(){
+  if(!cars.length) return `<div class="panel"><p class="empty">아직 차량이 없어요. 받은 백업 파일이 있으면 아래 ‘백업 불러오기’를 누르고, 없으면 위의 ‘차량 추가’로 첫 차를 등록하세요.</p></div>${notifyPanel()}`;
+  return `<div class="garage">${cars.map(c=>{
+    const st=carState(c);
+    const due=(c.items||[]).map(it=>({it,r:status(it,c)})).filter(x=>x.r.st==="over"||x.r.st==="soon");
+    const nOver=due.filter(x=>x.r.st==="over").length;
+    const label=st==="over"?`정비 필요 ${nOver}`:st==="soon"?`임박 ${due.length}`:st==="unset"?"기록 입력 필요":"양호";
+    return `<div class="gcard"><button class="gopen" data-tab="${c.id}">
+      <span class="gimg">${c.photo?`<img src="${esc(c.photo)}" alt="${esc(c.name)} 사진">`:`<span class="noimg">${esc(c.name)}</span>`}<span class="gstat ${st}">${label}</span></span>
+      <span class="gbody">
+        <span class="gname">${esc(c.name)}</span>
+        <span class="meta">${[c.model,c.driver&&("운전: "+c.driver)].filter(Boolean).map(esc).join(" · ")}</span>
+        <span class="godo">${c.odo!=null?fmt(c.odo)+" km":"주행거리 미입력"}${c.odoDate?" · "+c.odoDate:""}</span>
+        ${(()=>{const eo=estOdo(c);return eo&&eo.est?`<span class="meta">오늘 추정 약 ${fmt(eo.km)}km</span>`:""})()}
+        ${due.length?`<span class="gdue">${due.slice(0,3).map(x=>esc(x.it.label)).join(" · ")}${due.length>3?" 외 "+(due.length-3)+"건":""}</span>`:""}
+        <span class="gcta">정비·주유 보기 →</span>
+      </span></button>
+      <form class="quick" data-quick="${c.id}"><label for="q-${c.id}">지금 계기판 km<input id="q-${c.id}" inputmode="numeric" autocomplete="off" placeholder="${c.odo!=null?fmt(c.odo):"예: 128,400"}"></label><button class="primary" type="submit">기록</button></form></div>`;}).join("")}</div>${notifyPanel()}`;
+}
+function notifyPanel(){
+  return `<div class="panel">
+    <div class="sec-h"><h2>백업·공유</h2></div>
+    <p class="note">기록은 이 휴대폰에만 저장돼요. 아내분과 기록을 맞추려면 ‘백업 보내기’로 파일을 카카오톡 등으로 보내고, 받은 사람이 ‘백업 불러오기’를 누르세요. 두 사람 기록이 합쳐집니다.</p>
+    <div class="btns"><button class="primary" data-act="exportB">백업 보내기</button><label class="btnlike" for="importB">백업 불러오기<input type="file" id="importB" accept=".json,application/json"></label></div>
+  </div>`;
+}
+function notifyPanelUnused(){
+  const off=!ns.enabled;
+  return `<div class="panel">
+    <div class="sec-h"><h2>휴대폰 알림</h2></div>
+    <label class="sw" for="n-on"><input type="checkbox" id="n-on" ${ns.enabled?"checked":""}>매주 일요일 저녁, 휴대폰으로 알림 받기</label>
+    <label class="sw sub ${off?"dis":""}" for="n-mile"><input type="checkbox" id="n-mile" ${ns.mileage?"checked":""} ${off?"disabled":""}>주행거리 입력하라고 알려주기</label>
+    <label class="sw sub ${off?"dis":""}" for="n-maint"><input type="checkbox" id="n-maint" ${ns.maint?"checked":""} ${off?"disabled":""}>교체 시기가 지났거나 한 달 안에 다가오는 항목 알려주기</label>
+    <p class="note">${ns.enabled?"켜져 있어요.":"꺼져 있어요. 켜면 다음 일요일부터 알림이 와요."} 알림은 이 페이지 주인의 Claude 앱으로 갑니다.</p>
+  </div>`;
+}
+function carView(car){
+  const items=(car.items||[]).map(it=>({it,r:status(it,car)}));
+  const order={over:0,soon:1,ok:2,unset:3,off:4};
+  items.sort((a,b)=>order[a.r.st]-order[b.r.st]||(a.r.p<b.r.p?1:-1));
+  const unsetCount=items.filter(x=>x.r.st==="unset").length;
+  return `
+  <div class="panel">
+    ${car.photo?`<img class="photo" src="${esc(car.photo)}" alt="${esc(car.name)} 사진">`:""}
+    <div class="carhead">
+      <div><div class="carname">${esc(car.name)}</div><div class="meta">${[car.model,FUEL[car.fuel],car.driver&&("운전: "+car.driver)].filter(Boolean).map(esc).join(" · ")}</div></div>
+      <button class="ghost" data-act="editCar">차량 정보·메모</button>
+    </div>
+    ${car.memo?`<div class="memo">${esc(car.memo)}</div>`:""}
+    <div class="dial"><span class="lbl">총 주행거리</span>${digits(car.odo)}<span class="when">${car.odoDate?car.odoDate+" 입력":"아직 입력하지 않았어요"}</span>${(()=>{const eo=estOdo(car);return eo&&eo.est?`<span class="when est">오늘 추정 약 ${fmt(eo.km)}km · 최근 연 ${fmt(eo.rate*365)}km 주행 기준</span>`:""})()}</div>
+    <form class="odoform" id="odoForm">
+      <label for="odoIn">계기판 주행거리 입력 (km)<input id="odoIn" inputmode="numeric" autocomplete="off" placeholder="${car.odo!=null?fmt(car.odo):"예: 128,400"}"></label>
+      <button class="primary" type="submit">기록</button>
+    </form>
+    ${odoMsg?`<div class="msg ${odoMsg.cls}">${odoMsg.html}</div>`:""}
+  </div>
+  <div class="panel">
+    <div class="sec-h"><h2>소모품</h2><div class="legend"><span><i style="background:var(--over)"></i>지남</span><span><i style="background:var(--soon)"></i>임박</span><span><i style="background:var(--ok)"></i>여유</span></div></div>
+    ${unsetCount&&car.odo!=null?`<p class="msg info">${unsetCount}개 항목은 마지막 교체 기록이 없어요. 항목을 눌러 마지막 교체 km·날짜를 넣거나, 방금 교체했다면 ‘오늘 교체 완료’를 누르세요.</p>`:""}
+    <div class="items">${items.map(({it,r})=>itemRow(car,it,r)).join("")}</div>
+    <button class="ghost" data-act="addItem" style="align-self:flex-start">＋ 항목 추가</button>
+  </div>
+  ${fuelPanel(car)}
+  <div class="panel">
+    <div class="sec-h"><h2>기록</h2></div>
+    ${(car.log||[]).length?`<div class="log">${car.log.slice(0,30).map(l=>`<div><span>${esc(l.d)}</span><span class="n">${fmt(l.km)} km</span><span>${l.t==="svc"?"🔧 "+esc(l.label):"주행거리 입력"}${l.note?" · "+esc(l.note):""}</span></div>`).join("")}</div>`:`<p class="empty">주행거리를 입력하거나 정비를 완료하면 여기에 쌓입니다.</p>`}
+  </div>`;
+}
+function fillStats(car){
+  const fs=[...(car.fills||[])].sort((a,b)=>a.km-b.km);
+  const effs={}; let prevFull=null, acc=0;
+  fs.forEach(f=>{
+    acc+=f.l||0;
+    if(f.full){ if(prevFull&&f.km>prevFull.km&&acc>0) effs[f.id]={km:f.km-prevFull.km,l:acc}; prevFull=f; acc=0; }
+  });
+  const segs=Object.values(effs).slice(-5);
+  const avg=segs.length?segs.reduce((a,x)=>a+x.km,0)/segs.reduce((a,x)=>a+x.l,0):null;
+  const now=new Date(), m0=today().slice(0,7), pm=new Date(now.getFullYear(),now.getMonth()-1,1);
+  const m1=pm.getFullYear()+"-"+String(pm.getMonth()+1).padStart(2,"0");
+  const sum=m=>(car.fills||[]).filter(f=>(f.d||"").startsWith(m)).reduce((a,f)=>a+(f.won||0),0);
+  return {avg,effs,thisM:sum(m0),lastM:sum(m1)};
+}
+function fuelPanel(car){
+  const st=fillStats(car), list=[...(car.fills||[])].sort((a,b)=>b.d.localeCompare(a.d)||b.km-a.km).slice(0,10);
+  return `<div class="panel">
+    <div class="sec-h"><h2>주유</h2></div>
+    <div class="fstats"><span>평균 연비 <b>${st.avg?st.avg.toFixed(1):"–"}</b> km/L</span><span>이번 달 <b>${fmt(st.thisM)}</b>원</span><span>지난달 <b>${fmt(st.lastM)}</b>원</span></div>
+    <form class="fillform" id="fillForm">
+      <label for="fl-km">계기판 km<input id="fl-km" name="km" inputmode="numeric" autocomplete="off" required></label>
+      <label for="fl-l">주유량 (L)<input id="fl-l" name="l" inputmode="decimal" autocomplete="off"></label>
+      <label for="fl-w">금액 (원)<input id="fl-w" name="won" inputmode="numeric" autocomplete="off"></label>
+      <label for="fl-d">날짜<input id="fl-d" name="d" type="date" value="${today()}"></label>
+      <div class="full"><label class="sw" for="fl-full"><input type="checkbox" id="fl-full" name="full" checked>가득 주유</label><button class="primary" type="submit">주유 기록</button></div>
+    </form>
+    <p class="note">주유 기록의 km는 주행거리에도 자동으로 반영돼요. 연비는 ‘가득 주유’끼리 사이에서 계산해요.</p>
+    ${list.length?`<div class="fills"><div><span>날짜</span><span class="n">km</span><span class="n">주유량·금액</span><span class="n">연비</span><span></span></div>${list.map(f=>`<div><span>${esc(f.d.slice(2))}</span><span class="n">${fmt(f.km)}</span><span class="n">${f.l?f.l.toFixed(1)+"L":"–"}${f.won?"<br>"+fmt(f.won)+"원":""}</span><span class="n">${st.effs[f.id]?(st.effs[f.id].km/st.effs[f.id].l).toFixed(1):"–"}</span><button class="ghost" data-act="delFill" data-id="${f.id}" aria-label="삭제">삭제</button></div>`).join("")}</div>`:`<p class="empty">주유할 때 계기판 km와 주유량을 넣으면 연비와 유류비가 쌓여요.</p>`}
+  </div>`;
+}
+function itemRow(car,it,r){
+  const open=openItem===it.k;
+  const pill=r.st==="over"?`<span class="pill over">교체 필요</span>`:r.st==="soon"?`<span class="pill soon">임박</span>`:"";
+  const cyc=[it.km?fmt(it.km)+"km":"",it.mo?it.mo+"개월":""].filter(Boolean).join(" 또는 ");
+  const last=it.lastKm!=null||it.lastDate?`마지막 ${it.lastKm!=null?fmt(it.lastKm)+"km":""}${it.lastKm!=null&&it.lastDate?" · ":""}${it.lastDate||""}`:"마지막 교체 기록 없음";
+  return `<div class="item st-${r.st} ${it.on?"":"off"}">
+    <button class="row" data-item="${it.k}" aria-expanded="${open}">
+      <span class="nm">${esc(it.label)}${pill}</span><span class="rem">${it.on?remText(r):"사용 안 함"}</span>
+      ${it.on&&r.st!=="unset"?`<span class="bar"><b style="width:${Math.round(r.p*100)}%"></b></span>`:""}
+      <span class="detail">주기 ${cyc||"–"} · ${last}${it.on&&r.eta&&r.st!=="over"?` · <b>예상 ${ym(r.eta)}</b>`:""}${it.on&&r.st==="over"?" · <b>지금 정비하세요</b>":""}</span>
+    </button>
+    ${open?`<form class="edit" data-editform="${it.k}">
+      <label for="f-label">항목 이름<input id="f-label" name="label" value="${esc(it.label)}"></label>
+      <div class="grid4">
+        <label for="f-km">교체 주기 (km)<input id="f-km" name="km" inputmode="numeric" value="${it.km||""}" placeholder="없음"></label>
+        <label for="f-mo">교체 주기 (개월)<input id="f-mo" name="mo" inputmode="numeric" value="${it.mo||""}" placeholder="없음"></label>
+        <label for="f-lkm">마지막 교체 (km)<input id="f-lkm" name="lastKm" inputmode="numeric" value="${it.lastKm??""}"></label>
+        <label for="f-ld">마지막 교체 날짜<input id="f-ld" name="lastDate" type="date" value="${it.lastDate||""}"></label>
+      </div>
+      <div class="btns">
+        <button type="button" class="primary" data-act="done" data-k="${it.k}">오늘 교체 완료${car.odo!=null?" ("+fmt(car.odo)+"km)":""}</button>
+        <button type="submit">저장</button>
+        <button type="button" class="ghost" data-act="toggle" data-k="${it.k}">${it.on?"사용 안 함":"다시 사용"}</button>
+        <button type="button" class="ghost" data-act="delItem" data-k="${it.k}">항목 삭제</button>
+      </div>
+    </form>`:""}
+  </div>`;
+}
+let confirmDel=false;
+function carForm(car){
+  const c=car||{name:"",model:"",fuel:"gasoline",driver:""};
+  return `<form class="panel" id="carForm">
+    <div class="sec-h"><h2>${car?"차량 정보":"차량 추가"}</h2></div>
+    <div class="carform">
+      <label for="c-name">부르는 이름<input id="c-name" name="name" required value="${esc(c.name)}" placeholder="예: 아내 차"></label>
+      <label for="c-model">차종·연식<input id="c-model" name="model" value="${esc(c.model)}" placeholder="예: 2019 쏘렌토"></label>
+      <label for="c-fuel">연료<select id="c-fuel" name="fuel">${Object.entries(FUEL).map(([k,v])=>`<option value="${k}" ${c.fuel===k?"selected":""}>${v}</option>`).join("")}</select></label>
+      <label for="c-driver">주 운전자<input id="c-driver" name="driver" value="${esc(c.driver)}" placeholder="예: 아내"></label>
+    </div>
+    <label for="c-memo">메모 (정비소 연락처, 보증, 다음에 할 일)<textarea id="c-memo" name="memo">${esc(c.memo||"")}</textarea></label>
+    ${car?`<p class="note">연료를 바꿔도 기존 항목은 그대로 둡니다. 점화플러그·연료필터는 ‘항목 추가’로 직접 넣을 수 있어요.</p>`:`<p class="note">연료에 맞는 기본 소모품 목록이 함께 만들어집니다.</p>`}
+    <div class="btns">
+      <button class="primary" type="submit">${car?"저장":"추가"}</button>
+      <button type="button" data-act="cancelCar">취소</button>
+      ${car?(confirmDel?`<button type="button" class="danger" data-act="delCarYes">정말 삭제 (기록 모두 사라짐)</button>`:`<button type="button" class="ghost" data-act="delCar">차량 삭제</button>`):""}
+    </div>
+  </form>`;
+}
+
+/* ---------- events ---------- */
+const num=v=>{const n=parseInt(String(v).replace(/[^\d]/g,""),10);return isNaN(n)?null:n};
+function pushLog(car,entry){car.log=[entry,...(car.log||[])].slice(0,200)}
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button"); if(!t) return;
+  if(t.dataset.tab){sel=t.dataset.tab;openItem=null;editingCar=false;addingCar=false;odoMsg=null;render();return}
+  if(t.id==="addCarBtn"){addingCar=true;editingCar=false;render();return}
+  if(t.dataset.item){openItem=openItem===t.dataset.item?null:t.dataset.item;render();return}
+  const car=cars.find(c=>c.id===sel);
+  switch(t.dataset.act){
+    case "editCar": editingCar=true;confirmDel=false;render();break;
+    case "cancelCar": editingCar=false;addingCar=false;confirmDel=false;render();break;
+    case "delCar": confirmDel=true;render();break;
+    case "delCarYes": editingCar=false;confirmDel=false;removeCar(car.id);break;
+    case "addItem": {const k="c"+Date.now().toString(36);car.items.push({k,label:"새 항목",km:10000,mo:12,lastKm:null,lastDate:null,on:true});openItem=k;save(car);break}
+    case "done": {const it=car.items.find(i=>i.k===t.dataset.k); const kmNow=car.odo!=null?car.odo:(estOdo(car)?Math.round(estOdo(car).km):null); it.lastKm=kmNow; it.lastDate=today(); it.on=true;
+      pushLog(car,{d:today(),km:kmNow,t:"svc",label:it.label}); openItem=null; save(car); toast(it.label+" 교체를 기록했어요."); break}
+    case "toggle": {const it=car.items.find(i=>i.k===t.dataset.k); it.on=!it.on; save(car); break}
+    case "delItem": {car.items=car.items.filter(i=>i.k!==t.dataset.k); openItem=null; save(car); break}
+    case "forceOdo": applyOdo(car,odoMsg.pending,true); break;
+    case "exportB": exportBackup(); break;
+    case "delFill": car.fills=(car.fills||[]).filter(f=>f.id!==t.dataset.id); save(car); toast("주유 기록을 지웠어요."); break;
+  }
+});
+document.addEventListener("submit",e=>{
+  e.preventDefault();
+  const f=e.target, car=cars.find(c=>c.id===sel);
+  if(f.dataset.quick){
+    const qc=cars.find(c=>c.id===f.dataset.quick), v=num(f.querySelector("input").value);
+    if(!qc) return;
+    if(v==null){toast("숫자로 입력해 주세요.");return}
+    {const b=estOdo(qc)?.base; if(b!=null&&v<b){sel=qc.id;applyOdo(qc,v,false);return}}
+    applyOdo(qc,v,false);
+    const tmp=document.createElement("div");tmp.innerHTML=odoMsg.html;toast(qc.name+" · "+tmp.textContent);odoMsg=null;render();return;
+  }
+  if(f.id==="fillForm"){
+    const d=Object.fromEntries(new FormData(f)), km=num(d.km), l=parseFloat(String(d.l||"").replace(",",".")), won=num(d.won);
+    if(km==null){toast("계기판 km를 입력해 주세요.");return}
+    const fill={id:"f"+Date.now().toString(36),d:d.d||today(),km,l:isNaN(l)?null:l,won,full:!!d.full};
+    car.fills=[...(car.fills||[]),fill].slice(-300);
+    const prev=estOdo(car)?.base;
+    if(fill.d===today()&&(car.odo==null||km>=car.odo)){applyOdo(car,km,false);toast("주유를 기록했어요.");}
+    else {save(car);toast("주유를 기록했어요.");}
+    return;
+  }
+  if(f.id==="odoForm"){const v=num(f.odoIn.value); if(v==null){odoMsg={cls:"err",html:"숫자로 입력해 주세요."};render();return} applyOdo(car,v,false);return}
+  if(f.id==="carForm"){
+    const d=Object.fromEntries(new FormData(f));
+    if(addingCar){const id="car"+Date.now().toString(36);const nc={id,name:d.name.trim()||"새 차",model:d.model.trim(),fuel:d.fuel,driver:d.driver.trim(),memo:d.memo||"",odo:null,odoDate:null,items:presetItems(d.fuel),log:[]};
+      cars.push(nc);sel=id;addingCar=false;save(nc);}
+    else{Object.assign(car,{name:d.name.trim()||car.name,model:d.model.trim(),fuel:d.fuel,driver:d.driver.trim(),memo:d.memo||""});editingCar=false;save(car);}
+    return;
+  }
+  if(f.dataset.editform){
+    const it=car.items.find(i=>i.k===f.dataset.editform), d=Object.fromEntries(new FormData(f));
+    it.label=d.label.trim()||it.label; it.km=num(d.km)||0; it.mo=num(d.mo)||0; it.lastKm=num(d.lastKm); it.lastDate=d.lastDate||null;
+    openItem=null; save(car); toast("저장했어요.");
+  }
+});
+function applyOdo(car,v,force){
+  const prevKm=estOdo(car)?.base;
+  if(force){car.log=(car.log||[]).filter(l=>!(l.t==="odo"&&l.km>v));}
+  if(prevKm!=null&&v<prevKm&&!force){odoMsg={cls:"err",pending:v,html:`이전 기록(${fmt(prevKm)}km)보다 작아요. 잘못 입력한 기록을 고치는 거라면 <button type="button" data-act="forceOdo">${fmt(v)}km로 수정</button>`};render();return}
+  const before=new Set(car.items.filter(it=>["over","soon"].includes(status(it,car).st)).map(i=>i.k));
+  car.odo=v; car.odoDate=today(); pushLog(car,{d:today(),km:v,t:"odo"});
+  const due=car.items.map(it=>({it,r:status(it,car)})).filter(x=>x.r.st==="over"||x.r.st==="soon");
+  const fresh=due.filter(x=>!before.has(x.it.k));
+  if(due.length){
+    odoMsg={cls:due.some(x=>x.r.st==="over")?"err":"info",html:`<b>정비 알림</b> — ${due.map(x=>`${esc(x.it.label)}(${remText(x.r)})`).join(", ")}`};
+    if(fresh.length||due.some(x=>x.r.st==="over")) beep();
+  } else odoMsg={cls:"info",html:`${fmt(v)}km 기록했어요. 지금 당장 필요한 정비는 없어요.`};
+  save(car);
+}
+
+function exportBackup(){
+  const name="차계부-백업-"+today()+".json";
+  const blob=new Blob([JSON.stringify({app:"carcare",v:1,exportedAt:new Date().toISOString(),cars},null,1)],{type:"application/json"});
+  try{
+    const file=new File([blob],name,{type:"application/json"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],title:"차계부 백업"}).catch(()=>{});return}
+  }catch(e){}
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
+  toast("백업 파일을 저장했어요. 다운로드 폴더에서 카카오톡으로 보내세요.");
+}
+function mergeCar(a,b){
+  if(!a) return b;
+  const bNew=(b.updatedAt||0)>(a.updatedAt||0), c={...a};
+  ["name","model","fuel","driver","memo","photo"].forEach(k=>{if(b[k]!=null&&b[k]!==""&&(bNew||!c[k]))c[k]=b[k]});
+  if(b.odo!=null&&(a.odo==null||b.odo>a.odo)){c.odo=b.odo;c.odoDate=b.odoDate}
+  const key=l=>[l.d,l.km,l.t,l.label||""].join("|"), lm=new Map();
+  [...(a.log||[]),...(b.log||[])].forEach(l=>lm.set(key(l),l));
+  c.log=[...lm.values()].sort((x,y)=>String(y.d).localeCompare(String(x.d))).slice(0,200);
+  const fm=new Map(); [...(a.fills||[]),...(b.fills||[])].forEach(f=>fm.set(f.id,f)); c.fills=[...fm.values()];
+  const im=new Map(); (a.items||[]).forEach(i=>im.set(i.k,i));
+  (b.items||[]).forEach(i=>{const x=im.get(i.k); if(!x){im.set(i.k,i);return}
+    let y={...x};
+    if((i.lastDate||"")>(x.lastDate||"")||(i.lastKm||0)>(x.lastKm||0)) y={...y,lastKm:i.lastKm,lastDate:i.lastDate};
+    if(bNew) y={...y,label:i.label,km:i.km,mo:i.mo,on:i.on};
+    im.set(i.k,y)});
+  c.items=[...im.values()];
+  c.updatedAt=Math.max(a.updatedAt||0,b.updatedAt||0);
+  return c;
+}
+document.addEventListener("change",e=>{
+  if(e.target.id==="importB"){
+    const file=e.target.files&&e.target.files[0]; if(!file) return;
+    const fr=new FileReader();
+    fr.onload=()=>{
+      try{
+        const d=JSON.parse(fr.result); if(!d||!Array.isArray(d.cars)) throw 0;
+        d.cars.forEach(b=>{const i=cars.findIndex(c=>c.id===b.id); if(i<0)cars.push(b); else cars[i]=mergeCar(cars[i],b)});
+        lsSave(); sel="home"; render(); toast("백업을 불러왔어요. 차 "+d.cars.length+"대 기록을 합쳤어요.");
+      }catch(x){toast("차계부 백업 파일이 아니에요. ‘차계부-백업’으로 시작하는 .json 파일을 골라 주세요.")}
+    };
+    fr.readAsText(file); e.target.value=""; return;
+  }
+  const id=e.target.id, map={"n-on":"enabled","n-mile":"mileage","n-maint":"maint"};
+  if(!map[id]) return;
+  ns={...ns,[map[id]]:e.target.checked};
+  if(local||!db){try{localStorage.setItem("carcare-ns",JSON.stringify(ns))}catch(x){} render(); return}
+  db.doc("settings/notify").set({...ns,updatedAt:Date.now()}).then(()=>toast(map[id]==="enabled"?(ns.enabled?"휴대폰 알림을 켰어요.":"휴대폰 알림을 껐어요."):"알림 설정을 저장했어요.")).catch(()=>toast("알림 설정을 저장하지 못했어요."));
+  render();
+});
+/* ---------- boot ---------- */
+function startLocal(why){
+  local=true; cars=lsLoad(); try{ns={...ns,...JSON.parse(localStorage.getItem("carcare-ns")||"{}")}}catch(e){}
+  $("#sync").textContent=why; render();
+}
+(async()=>{
+  try{db=window.claude?.use?await window.claude.use("db"):null}catch(e){db=null}
+  if(!db){startLocal("이 휴대폰에 저장 중");return}
+  $("#sync").textContent="두 사람이 함께 보는 기록";
+  db.doc("settings/notify").onSnapshot(snap=>{if(snap.exists){const d=snap.data();ns={enabled:d.enabled!==false,mileage:d.mileage!==false,maint:d.maint!==false}} if(sel==="home")render();},()=>{});
+  db.collection("cars").onSnapshot(snap=>{
+    cars=snap.docs.map(d=>({id:d.id,...JSON.parse(JSON.stringify(d.data()))}));
+    cars.sort((a,b)=>(a.order??0)-(b.order??0)||String(a.id).localeCompare(b.id));
+    if(document.activeElement&&document.activeElement.matches("input,select")&&document.activeElement.closest("form.edit,#carForm,form.quick,#fillForm")) return;
+    render();
+  },err=>{startLocal("연결이 끊겨 이 기기에만 저장 중")});
+})();
+render();
+</script>
+</body>
+</html>
